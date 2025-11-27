@@ -1098,50 +1098,56 @@ function onUpdate() {
       loading("Updating…");
 
       // 2) Start polling up to 2 minutes
-      let attempts = 0;
-      let maxAttempts = 40; // 40 × 3 sec = 120 sec = 2 minutes
+let attempts = 0;
+let maxAttempts = 40; // 2 minutes
 
-      let poll = setInterval(() => {
-        attempts++;
+let poll = setInterval(() => {
+  attempts++;
 
-        fetch(API_BASE + "/plugins/telemetry/DEVICE/" + DEVICE_ID + "/attributes?keys=MS_Update_Buttton", {
-          headers: { "X-Authorization": "Bearer " + JWT }
-        })
-        .then(res => res.json())
-        .then(attr => {
-          let flag = false;
+  fetch(API_BASE + "/plugins/telemetry/DEVICE/" + DEVICE_ID +
+        "/values/timeseries?keys=MS_Update_Buttton&limit=1", {
+    headers: { "X-Authorization": "Bearer " + JWT }
+  })
+  .then(res => res.json())
+  .then(obj => {
+    
+    // If array missing or empty → no update yet
+    if (!obj.MS_Update_Buttton || obj.MS_Update_Buttton.length === 0) {
+      loading("Updating…");
+      return;
+    }
 
-          if (attr && attr.MS_Update_Buttton && attr.MS_Update_Buttton.length > 0) {
-            flag = attr.MS_Update_Buttton[0].value === true;
-          }
+    // Get latest telemetry value
+    let latest = obj.MS_Update_Buttton[0].value;
 
-          if (!flag) {
-            // UPDATE DETECTED
-            clearInterval(poll);
-            busy(false);
-            loading("Update detected ✓");
+    if (latest === true) {
+      // Still updating
+      loading("Updating…");
+    } else {
+      // Update detected
+      clearInterval(poll);
+      busy(false);
+      loading("Update detected ✓");
 
-            // reload calendar automatically
-            if (state.calendar) {
-              let v = state.calendar.view;
-              readRange(v.activeStart, v.activeEnd).then(events => {
-                state.lastEventsFull = events;
-                state.calendar.removeAllEvents();
-                state.calendar.addEventSource(events);
-              });
-            }
-          } else {
-            // STILL TRUE → still updating
-            loading("Updating…");
-          }
-
-          if (attempts >= maxAttempts) {
-            clearInterval(poll);
-            busy(false);
-            loading("Update timeout ⚠");
-          }
+      // Reload calendar
+      if (state.calendar) {
+        let v = state.calendar.view;
+        readRange(v.activeStart, v.activeEnd).then(events => {
+          state.lastEventsFull = events;
+          state.calendar.removeAllEvents();
+          state.calendar.addEventSource(events);
         });
-      }, 3000);
+      }
+    }
+
+    if (attempts >= maxAttempts) {
+      clearInterval(poll);
+      busy(false);
+      loading("Update timeout ⚠");
+    }
+
+  });
+}, 3000);
     })
     .catch(function (e) {
       console.error(e);
