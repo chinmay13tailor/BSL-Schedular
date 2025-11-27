@@ -929,9 +929,8 @@ if (btnEdit) btnEdit.addEventListener("click", function(){
   state.pickedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
   $("#fTitle").value    = p.MS_Title || "";
-  if ($("#fMachine")){
-    $("#fMachine").value  = p.MS_Machine || "Montex_Stenter";
-    $("#fMachine").readOnly = true;
+  if ($("#msMachine")){
+    $("#msMachine").value = p.MS_Machine || "Montex_Stenter";
   }
   $("#fType").value     = p.MS_Type || "Preventive";
   $("#fPriority").value = String(p.MS_Priority != null ? p.MS_Priority : "3");
@@ -991,9 +990,8 @@ function openModalForDate(jsDate){
   $("#modalTitle").textContent="Add maintenance task"; $("#saveTask").textContent="Save";
 
   $("#fTitle").value="";
-  if ($("#fMachine")){
-    $("#fMachine").value="Montex_Stenter";
-    $("#fMachine").readOnly = true;
+  if ($("#msMachine")){
+    $("#msMachine").value="Montex_Stenter";
   }
   $("#fType").value="Preventive";
   $("#fPriority").value="3";
@@ -1014,7 +1012,7 @@ function collectPayload(){
   var base = parts ? new Date(parts[0], parts[1]-1, parts[2]) : (state.pickedDate || new Date());
   return {
     MS_Title: ($("#fTitle").value||"").trim(),
-    MS_Machine: ($("#fMachine") && $("#fMachine").value) ? $("#fMachine").value : "Montex_Stenter",
+    MS_Machine: ($("#msMachine") && $("#msMachine").value) ? $("#msMachine").value : "Montex_Stenter",
     MS_Type: $("#fType").value || "Preventive",
     MS_Priority: parseInt($("#fPriority").value, 10) || 3,
     MS_Date: new Date(base.getFullYear(), base.getMonth(), base.getDate()).getTime(),
@@ -1584,7 +1582,5 @@ function startCalendar(){
 if (document.readyState==="complete" || document.readyState==="interactive") setTimeout(startCalendar,0);
 else document.addEventListener("DOMContentLoaded", startCalendar);
 </script>
-
-
 </body>
 </html>
