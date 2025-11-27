@@ -1065,35 +1065,70 @@ function onCreate(){
     .catch(function(e){ console.error(e); alert(e.message||"Failed to save"); })
     .finally(function(){ busy(false); });
 }
-function onUpdate(){
-  if(!state.selectedEvent || !state.selectedEvent.extendedProps){ alert("No task selected for update."); return; }
+function onUpdate() {
+  if (!state.selectedEvent || !state.selectedEvent.extendedProps) {
+    alert("No task selected for update.");
+    return;
+  }
+
   var payload = collectPayload();
   var baseTs = state.selectedEvent.extendedProps.__ts;
-  if(!baseTs){ alert("Missing base timestamp for update. Please reselect the task."); return; }
+
+  if (!baseTs) {
+    alert("Missing base timestamp for update. Please reselect the task.");
+    return;
+  }
+
   payload[ATTR_MS_UPD_TS] = baseTs;
 
-  var err = validatePayload(payload); if (err){ alert(err); return; }
+  var err = validatePayload(payload);
+  if (err) {
+    alert(err);
+    return;
+  }
 
-  loading("Updating…"); busy(true);
-  writeAttributes(payload, { mode:"update" })
-    .then(function(){
+  loading("Updating…");
+  busy(true);
+
+  writeAttributes(payload, { mode: "update" })
+    .then(function () {
       closeOverlay();
-      startAutoRefresh(payload[ATTR_MS_UPD_TS], function(found){
+
+      // Keep “Updating…” visible while waiting
+      loading("Updating…");
+
+      startAutoRefresh(payload[ATTR_MS_UPD_TS], function (found) {
         var p = found.extendedProps || {};
-        var titleOk = String(p.MS_Title||"") === String(payload.MS_Title||"");
-        var machOk  = normMachine(p.MS_Machine||"") === normMachine(payload.MS_Machine||"");
-        var typeOk  = String(p.MS_Type||"") === String(payload.MS_Type||"");
-        var priOk   = String(p.MS_Priority) === String(payload.MS_Priority);
-        var stOk    = String(p.MS_Status||"") === String(payload.MS_Status||"");
-        var sOk     = Number(p.MS_Start||0) === Number(payload.MS_Start||0);
-        var eOk     = Number(p.MS_End||0)   === Number(payload.MS_End||0);
-        var techOk  = String(p.MS_Technicians||"") === String(payload.MS_Technicians||"");
-        var taskOk  = String(p.MS_Task||"") === String(payload.MS_Task||"");
-        return titleOk && machOk && typeOk && priOk && stOk && sOk && eOk && techOk && taskOk;
+
+        var titleOk = String(p.MS_Title || "") === String(payload.MS_Title || "");
+        var machOk = normMachine(p.MS_Machine || "") === normMachine(payload.MS_Machine || "");
+        var typeOk = String(p.MS_Type || "") === String(payload.MS_Type || "");
+        var priOk = String(p.MS_Priority) === String(payload.MS_Priority);
+        var stOk = String(p.MS_Status || "") === String(payload.MS_Status || "");
+        var sOk = Number(p.MS_Start || 0) === Number(payload.MS_Start || 0);
+        var eOk = Number(p.MS_End || 0) === Number(payload.MS_End || 0);
+        var techOk = String(p.MS_Technicians || "") === String(payload.MS_Technicians || "");
+        var taskOk = String(p.MS_Task || "") === String(payload.MS_Task || "");
+
+        var matched =
+          titleOk && machOk && typeOk && priOk &&
+          stOk && sOk && eOk && techOk && taskOk;
+
+        if (matched) {
+          busy(false);
+          loading("Update detected ✓");
+          return true; // stop auto-refresh
+        }
+
+        return false; // continue waiting
       });
     })
-    .catch(function(e){ console.error(e); alert(e.message||"Failed to update"); })
-    .finally(function(){ busy(false); });
+    .catch(function (e) {
+      console.error(e);
+      alert(e.message || "Failed to update");
+      busy(false);
+      loading("");
+    });
 }
 
 /************ PDF (Download) ************/
