@@ -536,17 +536,17 @@ function readRange(rangeStart, rangeEnd){
           end:   new Date(en),
           classNames: ["event", colorByStatus(r.MS_Status)],
           extendedProps: {
-            MS_Title: r.MS_Title || "",
-            MS_Machine: r.MS_Machine || "",
-            MS_Type: r.MS_Type || "Preventive",
-            MS_Priority: r.MS_Priority != null ? r.MS_Priority : 3,
+            MS_Title: r.MS_Title || "",   
+            MS_Machine: r.MS_Machine || "",  
+            MS_Type: r.MS_Type || "Preventive",   
+            MS_Priority: r.MS_Priority != null ? r.MS_Priority : 3,   
             MS_Date: r.MS_Date || null,
-            MS_Start: st,
-            MS_End: en,
-            MS_Status: String(r.MS_Status || "Planned").trim().replace(/inprogress/i,"In-Progress"),
-            MS_Description: r.MS_Description || "",
-            MS_Technicians: r.MS_Technicians || "",
-            MS_Task: r.MS_Task || "",
+            MS_Start: st,     
+            MS_End: en, 
+            MS_Status: String(r.MS_Status || "Planned").trim().replace(/inprogress/i,"In-Progress"),   
+            MS_Description: r.MS_Description || "",    
+            MS_Technicians: r.MS_Technicians || "",   
+            MS_Task: r.MS_Task || "",  
             __ts: r.ts
           }
         });
