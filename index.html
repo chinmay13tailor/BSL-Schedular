@@ -1126,27 +1126,31 @@ let poll = setInterval(() => {
     } else {
       // Update detected
 // When MS_Update_Button becomes false → UPDATE DETECTED
+// When MS_Update_Button becomes false → UPDATE DETECTED
 clearInterval(poll);
 busy(false);
 loading("Update detected ✓");
 
 // === FORCE CALENDAR RELOAD ===
 if (state.calendar) {
+
     let view = state.calendar.view;
 
     readRange(view.activeStart, view.activeEnd)
-      .then(events => {
-        state.lastEventsFull = events;
+        .then(events => {
 
-        // Clear old events
-        state.calendar.getEvents().forEach(e => e.remove());
+            state.lastEventsFull = events;
 
-        // Add updated events
-        events.forEach(ev => state.calendar.addEvent(ev));
+            // Reset calendar safely
+            state.calendar.removeAllEvents();
 
-        state.calendar.render();
-      })
-      .catch(err => console.error("Calendar refresh failed:", err));
+            // Add new events correctly
+            state.calendar.addEventSource(events);
+
+            // Force redraw
+            state.calendar.render();
+        })
+        .catch(err => console.error("Calendar refresh failed:", err));
 }
 
     if (attempts >= maxAttempts) {
