@@ -820,7 +820,7 @@ function writeAttributes(payload, opts){
     MS_Task: payload.MS_Task || ""
   };
   if (opts && opts.mode==="create"){
-    body[ATTR_MS_SAVE] = false; // trigger create path
+    body[ATTR_MS_SAVE] = true; // trigger create path
   } else if (opts && (opts.mode==="update" || opts.mode==="cancel")){
     body[ATTR_MS_UPDATE] = true;
     if (payload[ATTR_MS_UPD_TS]) body[ATTR_MS_UPD_TS] = payload[ATTR_MS_UPD_TS];
