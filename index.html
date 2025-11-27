@@ -307,11 +307,7 @@
 
       <div>
         <label>Machine</label>
-        <select id="fMachine" class="input">
-          <option>MC_01</option>
-          <option>MC_02</option>
-          <option>MC_03</option>
-        </select>
+<input id="msMachine" type="text" value="Montex_Stenter" readonly />
       </div>
       <div>
         <label>Type</label>
@@ -905,7 +901,7 @@ $("#btnEdit").addEventListener("click", function(){
   state.pickedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
   $("#fTitle").value    = p.MS_Title || "";
-  $("#fMachine").value  = normMachine(p.MS_Machine || "MC_01");
+  $("#fMachine").value  = normMachine(p.MS_Machine || "Monter Stenter");
   $("#fType").value     = p.MS_Type || "Preventive";
   $("#fPriority").value = String(p.MS_Priority != null ? p.MS_Priority : "3");
   $("#fDate").value     = new Date(state.pickedDate.getTime() - state.pickedDate.getTimezoneOffset()*60000).toISOString().slice(0,10);
@@ -958,7 +954,7 @@ function openModalForDate(jsDate){
   state.pickedDate = new Date(jsDate.getFullYear(), jsDate.getMonth(), jsDate.getDate());
   $("#modalTitle").textContent="Add maintenance task"; $("#saveTask").textContent="Save";
 
-  $("#fTitle").value=""; $("#fMachine").value="MC_01"; $("#fType").value="Preventive";
+  $("#fTitle").value=""; $("#fMachine").value="Monter Stenter"; $("#fType").value="Preventive";
   $("#fPriority").value="3";
   $("#fDate").value = new Date(state.pickedDate.getTime() - state.pickedDate.getTimezoneOffset()*60000).toISOString().slice(0,10);
   $("#fTimeStart").value="09:00"; $("#fTimeEnd").value="11:00";
@@ -1188,7 +1184,7 @@ function generatePdf(ev){
   html2pdf().from(root).set(opt).save();
 }
 
-/************ RUNTIME HELPERS (for Preventive Runtime tips, MC_01) ************/
+/************ RUNTIME HELPERS (for Preventive Runtime tips, Monter Stenter) ************/
 function fetchDailyRuntimeMinutesForKey(dayDate, key){
   const s = startOfDay(dayDate).getTime();
   const e = endOfDay(dayDate).getTime();
@@ -1222,7 +1218,7 @@ function fetchDailyRuntimeMinutesForKey(dayDate, key){
     });
 }
 async function fetchRuntimeMinutesForMachine(mNorm, fromTs, endTs){
-  if (mNorm!=="MC_01") return 0;
+  if (mNorm!=="Monter Stenter") return 0;
   const key = "Currentday_Runtime";
 
   const start = new Date(fromTs || Date.now()); start.setHours(0,0,0,0);
@@ -1289,13 +1285,13 @@ async function tipsPreventiveRuntime(){
   const lookBackStart = new Date(); lookBackStart.setDate(lookBackStart.getDate()-120);
   const events = await readRange(lookBackStart, new Date());
 
-  const mNorm = "MC_01";
+  const mNorm = "Monter Stenter";
   const lastCompletedTs = latestCompletedTsForMachine(events, mNorm) || lookBackStart.getTime();
 
   const totalMinutes = await fetchRuntimeMinutesForMachine(mNorm, lastCompletedTs);
   const totalHours = totalMinutes / 60.0;
 
-  const pretty = "MC_01";
+  const pretty = "Monter Stenter";
   const statusTxt = totalHours > 400 ? "Above 400 hrs (Action required)" : "Below 400 hrs";
 
   const card = {
@@ -1340,7 +1336,7 @@ async function tipsCorrectiveTelemetry() {
       {
         severity:
           totalDowntimeMinutes > 250 || occurrences > 5 ? "High" : "Medium",
-        title: "Corrective Maintenance — MC_01",
+        title: "Corrective Maintenance — Monter Stenter",
         subtitle:
           `Window: ${start.toLocaleDateString()} → ${end.toLocaleDateString()}`,
         body:
