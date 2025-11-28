@@ -1023,46 +1023,66 @@ function onCreate(){
 /* ---------- UPDATE FLOW ---------- */
 function onUpdate() {
 
-    if (!state.selectedEvent) {
-        alert("Select a task first.");
-        return;
-    }
+  if (!state.selectedEvent || !state.selectedEvent.extendedProps) {
+    alert("Select a task first.");
+    return;
+  }
 
-    const payload = collectPayload();
-    busy(true);
-    loading("Updating…");
+  // Collect updated form data
+  const payload = collectPayload();
 
-    // Write update command
-    writeAttributes({ ...payload, MS_Update_Buttton: true }, { mode: "update" })
-      .catch(err => console.error(err));
+  // CRITICAL → attach the correct event timestamp
+  // This ensures the correct event gets updated.
+  payload[ATTR_MS_UPD_TS] = state.selectedEvent.extendedProps.__ts;
 
-    // ---- 65 SECOND AUTO REFRESH LOOP ----
-    let elapsed = 0;
-    const interval = 3000; // 3s
-    const max = 65000;     // 65s
+  loading("Updating...");
+  busy(true);
 
-    const timer = setInterval(() => {
+  // Write update attributes (MS_Update_Button = true)
+  writeAttributes(payload, { mode: "update" })
+    .then(() => {
+      closeOverlay();
 
-        elapsed += interval;
+      // Start 65-second auto-refresh
+      let remaining = 65;
+      loading(`Updating… (${remaining}s left)`);
 
-        // ALWAYS refresh calendar
-        refreshCalendarAfterUpdate();
+      const timer = setInterval(() => {
+        remaining--;
+        loading(`Updating… (${remaining}s left)`);
 
-        loading(`Updating… (${Math.max(0, Math.ceil((max - elapsed)/1000))}s left)`);
-
-        if (elapsed >= max) {
-            clearInterval(timer);
-
-            // Optional: reset the update flag
-            writeAttributes({ MS_Update_Buttton: false }, { mode: "update" })
-              .catch(()=>{});
-
-            busy(false);
-            loading("Update completed ✓");
+        // STOP after 65 seconds
+        if (remaining <= 0) {
+          clearInterval(timer);
+          busy(false);
+          loading("Stopped auto-refresh");
+          return;
         }
 
-    }, interval);
+        // REFRESH CALENDAR ON EVERY LOOP
+        if (!state.lastRange) return;
+
+        readRange(state.lastRange.start, state.lastRange.end)
+          .then(events => {
+            state.lastEventsFull = events.slice();
+            populateFilters(events);
+            refreshCalendar();
+          })
+          .catch(err => {
+            console.error("Auto-refresh error:", err);
+          });
+
+      }, 3000); // Refresh every 3 seconds
+    })
+    .catch(err => {
+      console.error(err);
+      alert(err.message || "Failed to update");
+    })
+    .finally(() => {
+      busy(false);
+    });
 }
+
 
 
 
