@@ -1021,86 +1021,69 @@ function onCreate(){
 }
 
 /* ---------- UPDATE FLOW ---------- */
-function onUpdate(){
-  if (!state.selectedEvent || !state.selectedEvent.extendedProps){
-    alert("Select a task first.");
-    return;
-  }
+function onUpdate() {
 
-  const payload = collectPayload();
-  // Preserve original __ts so backend can match record
-  payload[ATTR_MS_UPD_TS] = state.selectedEvent.extendedProps.__ts;
-
-  const err = validatePayload(payload);
-  if (err){
-    alert(err);
-    return;
-  }
-
-  loading("Updating…");
-  busy(true);
-
-  writeAttributes(payload, { mode: "update" })
-    .then(() => {
-      closeOverlay();
-
-      const maxDurationMs = 3 * 60 * 1000; // 3 minutes
-      const deadline = Date.now() + maxDurationMs;
-
-     const poll = setInterval(() => {
-    attempts++;
-
-    if (attempts >= maxAttempts) {
-        clearInterval(poll);
-        busy(false);
-        loading("Update timeout ⚠");
+    if (!state.selectedEvent) {
+        alert("Select a task first");
         return;
     }
 
-    const url = API_BASE +
-      "/plugins/telemetry/DEVICE/" + DEVICE_ID +
-      "/values/timeseries?keys=MS_Update_Buttton&limit=1";
+    const payload = collectPayload();
 
-    fetch(url, { headers:{ "X-Authorization":"Bearer " + JWT } })
-      .then(res => res.json())
-      .then(obj => {
-          const arr = obj.MS_Update_Buttton || [];
-          const latest = arr.length ? arr[0].value : null;
+    busy(true);
+    loading("Updating…");
 
-          const isFalse =
-            latest === false ||
-            latest === "false" ||
-            latest === 0 ||
-            latest === "0";
-
-          // Always refresh calendar
-          refreshCalendarAfterUpdate(payload);
-
-          // ⭐ NEW STOP CONDITION ⭐
-          if (isFalse || calendarContainsUpdatedEvent(payload)) {
-              clearInterval(poll);
-              busy(false);
-              loading("Update detected ✓");
-              return;
-          }
-
-          // Continue polling…
-          loading("Updating…");
-      })
+    // Set update button = true
+    writeAttributes({ ...payload, MS_Update_Buttton: true }, { mode: "update" })
       .catch(err => {
-          console.error("Update poll error:", err);
-          loading("Updating…");
+          busy(false);
+          alert("Update failed: " + err.message);
       });
 
-}, 3000);
-   // every 3 seconds
-    })
-    .catch(err => {
-      console.error(err);
-      alert(err.message || "Failed to update");
-      busy(false);
-    });
+    // ---- POLLING BY TIMER: REFRESH EVERY 3s FOR 65 SECONDS ----
+    let elapsed = 0;
+    const interval = 3000; // 3 seconds
+    const maxTime = 65000; // 65 seconds
+
+    const polling = setInterval(() => {
+
+        elapsed += interval;
+
+        // Always refresh calendar
+        function refreshCalendarAfterUpdate(payload) {
+    if (!state.calendar) return;
+
+    const view = state.calendar.view;
+
+    readRange(view.activeStart, view.activeEnd)
+      .then(events => {
+          state.lastEventsFull = events;
+
+          state.calendar.getEvents().forEach(ev => ev.remove());
+          events.forEach(ev => state.calendar.addEvent(ev));
+
+          state.calendar.render();
+      })
+      .catch(err => console.error("Calendar refresh error:", err));
 }
+        // Update message
+        loading("Updating… (" + Math.ceil((maxTime - elapsed) / 1000) + "s left)");
+
+        // Stop after 65 seconds
+        if (elapsed >= maxTime) {
+            clearInterval(polling);
+
+            // Turn off button on TB (optional)
+            writeAttributes({ MS_Update_Buttton: false }, { mode: "update" })
+              .catch(()=>{});
+
+            busy(false);
+            loading("Update completed ✓");
+        }
+
+    }, interval);
+}
+
 
 /************ CANCEL ************/
 function onCancel(){
