@@ -1017,114 +1017,56 @@ function onCreate(){
     });
 }
 
-function onUpdate(){
-  if (!state.selectedEvent || !state.selectedEvent.extendedProps){
-    alert("No task selected for update.");
-    return;
-  }
+writeAttributes(payload, { mode: "update" })
+  .then(() => {
+    closeOverlay();
+    loading("Updating…");
 
-  const payload = collectPayload();
-  const baseTs = state.selectedEvent.extendedProps.__ts;
+    let attempts = 0;
+    const maxAttempts = 60; // 60 * 3s = 180s = 3 minutes
 
-  if (!baseTs){
-    alert("Missing base timestamp. Please reselect the task.");
-    return;
-  }
+    const poll = setInterval(() => {
+      attempts++;
 
-  payload[ATTR_MS_UPD_TS]   = baseTs;
-  payload[ATTR_MS_UPDATE]   = true;     // For server-side reference
-  payload["MS_Update_Buttton"] = true;  // As timeseries trigger (your existing tag)
+      if (attempts >= maxAttempts) {
+        clearInterval(poll);
+        busy(false);
+        loading("Update timeout ⚠");
+        return;
+      }
 
-  const err = validatePayload(payload);
-  if (err){
-    alert(err);
-    return;
-  }
+      const url = API_BASE +
+        "/plugins/telemetry/DEVICE/" + DEVICE_ID +
+        "/values/timeseries?keys=MS_Update_Buttton&limit=1";
 
-  busy(true);
-  loading("Updating…");
+      fetch(url, { headers:{ "X-Authorization":"Bearer " + JWT } })
+        .then(res => res.json())
+        .then(obj => {
+          const arr = obj.MS_Update_Buttton || [];
+          const latest = arr.length ? arr[0].value : null;
 
-  // 1) Send update attributes
-  writeAttributes(payload, { mode: "update" })
-    .then(() => {
-      closeOverlay();
-      loading("Updating…");
+          const isFalse = (latest === false || latest === "false" || latest === 0 || latest === "0");
 
-      // 2) Poll MS_Update_Buttton every 3s up to 2 min
-      let attempts = 0;
-      const maxAttempts = 40;  // 40 * 3s = 120s
+          // --- Always refresh calendar ---
+          refreshCalendarAfterUpdate(payload);
 
-      const poll = setInterval(() => {
-        attempts++;
-
-        if (attempts >= maxAttempts){
-          clearInterval(poll);
-          busy(false);
-          loading("Update timeout ⚠");
-          return;
-        }
-
-        const url = API_BASE +
-          "/plugins/telemetry/DEVICE/" + DEVICE_ID +
-          "/values/timeseries?keys=MS_Update_Buttton&limit=1";
-
-        fetch(url, { headers:{ "X-Authorization":"Bearer " + JWT } })
-          .then(res => res.json())
-          .then(obj => {
-            const arr = obj.MS_Update_Buttton || [];
-
-            // If no data yet → still updating
-            if (!arr.length){
-              loading("Updating…");
-              return;
-            }
-
-            const latest = arr[0].value;
-
-            const isTrue  = (latest === true || latest === "true" || latest === 1 || latest === "1");
-            const isFalse = (latest === false || latest === "false" || latest === 0 || latest === "0");
-
-            if (isTrue){
-              // Still updating
-              loading("Updating…");
-              return;
-            }
-
-            if (isFalse){
-              // UPDATE DETECTED
-              clearInterval(poll);
-              busy(false);
-              loading("Update detected ✓");
-
-              // Force reload calendar from lastRange
-              if (state.calendar && state.lastRange){
-                const { start, end } = state.lastRange;
-
-                readRange(start, end)
-                  .then(events => {
-                    state.lastEventsFull = events.slice();
-                    populateFilters(events);
-                    state.calendar.removeAllEvents();
-                    state.calendar.addEventSource(applyFilters(events));
-                    state.calendar.render();
-                  })
-                  .catch(err => console.error("Calendar refresh failed:", err));
-              }
-            }
-          })
-          .catch(err => {
-            console.error("Update poll error:", err);
+          // ==== STOP ONLY WHEN UPDATE CONFIRMED ====
+          if (isFalse && calendarContainsUpdatedEvent(payload)) {
+            clearInterval(poll);
+            busy(false);
+            loading("Update detected ✓");
+          } else {
             loading("Updating…");
-          });
-      }, 3000);
-    })
-    .catch(e => {
-      console.error(e);
-      alert(e.message || "Failed to update");
-      busy(false);
-      loading("");
-    });
-}
+          }
+        })
+        .catch(err => {
+          console.error("Update poll error:", err);
+          loading("Updating…");
+        });
+
+    }, 3000);
+  })
+
 
 /************ CANCEL ************/
 function onCancel(){
@@ -1848,6 +1790,34 @@ if (document.readyState === "complete" || document.readyState === "interactive")
     initUI();
     startCalendar();
   });
+}
+  // Force calendar reload correctly
+function refreshCalendarAfterUpdate(payload){
+  if (!state.calendar || !state.lastRange) return;
+
+  const { start, end } = state.lastRange;
+
+  readRange(start, end)
+    .then(events => {
+      state.lastEventsFull = events.slice();
+      populateFilters(events);
+
+      const filtered = applyFilters(events);
+
+      // remove old
+      const sources = state.calendar.getEventSources();
+      sources.forEach(src => src.remove());
+
+      // add new
+      state.calendar.addEventSource({ events: filtered });
+      state.calendar.refetchEvents();
+    })
+    .catch(err => console.error("Calendar refresh error:", err));
+}
+
+// Check if updated event is now visible in calendar
+function calendarContainsUpdatedEvent(payload){
+  return state.lastEventsFull.some(ev => eventMatchesPayload(ev, payload));
 }
 </script>
 </body>
