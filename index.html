@@ -946,18 +946,20 @@ function validatePayload(p){
 /* Match event to payload */
 function eventMatchesPayload(ev, payload){
   const p = ev.extendedProps || {};
-  return (
+
+  // identity match: same machine + same start + same end
+  const baseMatch =
     normMachine(p.MS_Machine) === normMachine(payload.MS_Machine) &&
-    String(p.MS_Title || "")  === String(payload.MS_Title || "") &&
-    String(p.MS_Type || "")   === String(payload.MS_Type || "") &&
-    String(p.MS_Status || "") === String(payload.MS_Status || "") &&
-    String(p.MS_Priority)     === String(payload.MS_Priority) &&
-    Number(p.MS_Start || 0)   === Number(payload.MS_Start || -1) &&
-    Number(p.MS_End || 0)     === Number(payload.MS_End || -1) &&
-    String(p.MS_Technicians || "") === String(payload.MS_Technicians || "") &&
-    String(p.MS_Task || "")        === String(payload.MS_Task || "")
-  );
+    Number(p.MS_Start) === Number(payload.MS_Start) &&
+    Number(p.MS_End)   === Number(payload.MS_End);
+
+  // if telemetry has __ts and payload had same __ts → also match
+  const tsMatch =
+    (p.__ts && payload.__ts && String(p.__ts) === String(payload.__ts));
+
+  return baseMatch || tsMatch;
 }
+
 
 /* ---------- CREATE FLOW ---------- */
 function onCreate(){
