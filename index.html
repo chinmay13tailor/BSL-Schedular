@@ -1837,7 +1837,7 @@ function refreshCalendarAfterUpdate(payload){
       sources.forEach(src => src.remove());
 
       // add new
-      state.calendar.addEventSource({ events: filtered });
+      state.calendar.addEventSource(filtered);
       state.calendar.refetchEvents();
     })
     .catch(err => {
