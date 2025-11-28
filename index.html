@@ -1047,47 +1047,53 @@ function onUpdate(){
       const maxDurationMs = 3 * 60 * 1000; // 3 minutes
       const deadline = Date.now() + maxDurationMs;
 
-      const poll = setInterval(async () => {
-        try {
-          if (Date.now() > deadline) {
-            clearInterval(poll);
-            busy(false);
-            loading("Update timeout ⚠");
-            return;
-          }
+     const poll = setInterval(() => {
+    attempts++;
 
-          // 1) Refresh calendar/list from telemetry
-          if (state.lastRange) {
-            await refreshCalendarAfterUpdate(payload);
-          }
+    if (attempts >= maxAttempts) {
+        clearInterval(poll);
+        busy(false);
+        loading("Update timeout ⚠");
+        return;
+    }
 
-          // 2) Read last MS_Update_Buttton value
-          const url = API_BASE +
-            "/plugins/telemetry/DEVICE/" + DEVICE_ID +
-            "/values/timeseries?keys=" + encodeURIComponent(ATTR_MS_UPDATE) +
-            "&limit=1";
+    const url = API_BASE +
+      "/plugins/telemetry/DEVICE/" + DEVICE_ID +
+      "/values/timeseries?keys=MS_Update_Buttton&limit=1";
 
-          const res = await fetch(url, { headers:{ "X-Authorization":"Bearer " + JWT } });
-          const obj = await res.json();
-          const arr = obj[ATTR_MS_UPDATE] || [];
+    fetch(url, { headers:{ "X-Authorization":"Bearer " + JWT } })
+      .then(res => res.json())
+      .then(obj => {
+          const arr = obj.MS_Update_Buttton || [];
           const latest = arr.length ? arr[0].value : null;
-          const isFalse = (latest === false || latest === "false" || latest === 0 || latest === "0");
 
-          // 3) Stop only when:
-          //    - backend has set MS_Update_Buttton back to false
-          //    - AND calendar contains updated event
-          if (isFalse && calendarContainsUpdatedEvent(payload)) {
-            clearInterval(poll);
-            busy(false);
-            loading("Update detected ✓");
-          } else {
-            loading("Updating…");
+          const isFalse =
+            latest === false ||
+            latest === "false" ||
+            latest === 0 ||
+            latest === "0";
+
+          // Always refresh calendar
+          refreshCalendarAfterUpdate(payload);
+
+          // ⭐ NEW STOP CONDITION ⭐
+          if (isFalse || calendarContainsUpdatedEvent(payload)) {
+              clearInterval(poll);
+              busy(false);
+              loading("Update detected ✓");
+              return;
           }
-        } catch (err) {
+
+          // Continue polling…
+          loading("Updating…");
+      })
+      .catch(err => {
           console.error("Update poll error:", err);
           loading("Updating…");
-        }
-      }, 3000);   // every 3 seconds
+      });
+
+}, 3000);
+   // every 3 seconds
     })
     .catch(err => {
       console.error(err);
