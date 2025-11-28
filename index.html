@@ -379,7 +379,6 @@
 <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 <script>
 /************ CONFIG ************/
-/************ CONFIG ************/
 const ORIGIN   = "https://plantwiz.pimateck.in";
 const API_BASE = ORIGIN + "/api";
 const DEVICE_ID = "81261350-b886-11f0-87ea-b9809c1a7a9e";
@@ -485,6 +484,7 @@ const state = {
 
 let overlay = null;
 
+// Auto refresh loop (used for create & cancel flows)
 let _autoTimer = null;
 let _autoDeadline = 0;
 
@@ -959,6 +959,7 @@ function eventMatchesPayload(ev, payload){
   );
 }
 
+/* ---------- CREATE FLOW ---------- */
 function onCreate(){
   const payload = collectPayload();
   const err = validatePayload(payload);
@@ -973,9 +974,9 @@ function onCreate(){
   writeAttributes(payload, { mode:"create" })
     .then(() => {
       closeOverlay();
-      // Use auto-refresh loop for create
+      // Auto-refresh loop for create
       stopAutoRefresh();
-      _autoDeadline = Date.now() + 3*60*1000;
+      _autoDeadline = Date.now() + 3*60*1000;   // 3 minutes
       _autoTimer = setInterval(() => {
         if (Date.now() > _autoDeadline){
           stopAutoRefresh();
@@ -1017,40 +1018,62 @@ function onCreate(){
     });
 }
 
-writeAttributes(payload, { mode: "update" })
-  .then(() => {
-    closeOverlay();
-    loading("Updating…");
+/* ---------- UPDATE FLOW ---------- */
+function onUpdate(){
+  if (!state.selectedEvent || !state.selectedEvent.extendedProps){
+    alert("Select a task first.");
+    return;
+  }
 
-    let attempts = 0;
-    const maxAttempts = 60; // 60 * 3s = 180s = 3 minutes
+  const payload = collectPayload();
+  // Preserve original __ts so backend can match record
+  payload[ATTR_MS_UPD_TS] = state.selectedEvent.extendedProps.__ts;
 
-    const poll = setInterval(() => {
-      attempts++;
+  const err = validatePayload(payload);
+  if (err){
+    alert(err);
+    return;
+  }
 
-      if (attempts >= maxAttempts) {
-        clearInterval(poll);
-        busy(false);
-        loading("Update timeout ⚠");
-        return;
-      }
+  loading("Updating…");
+  busy(true);
 
-      const url = API_BASE +
-        "/plugins/telemetry/DEVICE/" + DEVICE_ID +
-        "/values/timeseries?keys=MS_Update_Buttton&limit=1";
+  writeAttributes(payload, { mode: "update" })
+    .then(() => {
+      closeOverlay();
 
-      fetch(url, { headers:{ "X-Authorization":"Bearer " + JWT } })
-        .then(res => res.json())
-        .then(obj => {
-          const arr = obj.MS_Update_Buttton || [];
+      const maxDurationMs = 3 * 60 * 1000; // 3 minutes
+      const deadline = Date.now() + maxDurationMs;
+
+      const poll = setInterval(async () => {
+        try {
+          if (Date.now() > deadline) {
+            clearInterval(poll);
+            busy(false);
+            loading("Update timeout ⚠");
+            return;
+          }
+
+          // 1) Refresh calendar/list from telemetry
+          if (state.lastRange) {
+            await refreshCalendarAfterUpdate(payload);
+          }
+
+          // 2) Read last MS_Update_Buttton value
+          const url = API_BASE +
+            "/plugins/telemetry/DEVICE/" + DEVICE_ID +
+            "/values/timeseries?keys=" + encodeURIComponent(ATTR_MS_UPDATE) +
+            "&limit=1";
+
+          const res = await fetch(url, { headers:{ "X-Authorization":"Bearer " + JWT } });
+          const obj = await res.json();
+          const arr = obj[ATTR_MS_UPDATE] || [];
           const latest = arr.length ? arr[0].value : null;
-
           const isFalse = (latest === false || latest === "false" || latest === 0 || latest === "0");
 
-          // --- Always refresh calendar ---
-          refreshCalendarAfterUpdate(payload);
-
-          // ==== STOP ONLY WHEN UPDATE CONFIRMED ====
+          // 3) Stop only when:
+          //    - backend has set MS_Update_Buttton back to false
+          //    - AND calendar contains updated event
           if (isFalse && calendarContainsUpdatedEvent(payload)) {
             clearInterval(poll);
             busy(false);
@@ -1058,15 +1081,18 @@ writeAttributes(payload, { mode: "update" })
           } else {
             loading("Updating…");
           }
-        })
-        .catch(err => {
+        } catch (err) {
           console.error("Update poll error:", err);
           loading("Updating…");
-        });
-
-    }, 3000);
-  })
-
+        }
+      }, 3000);   // every 3 seconds
+    })
+    .catch(err => {
+      console.error(err);
+      alert(err.message || "Failed to update");
+      busy(false);
+    });
+}
 
 /************ CANCEL ************/
 function onCancel(){
@@ -1097,7 +1123,7 @@ function onCancel(){
 
   writeAttributes(payload, { mode:"cancel" })
     .then(() => {
-      // Use generic auto-refresh
+      // Generic auto-refresh
       stopAutoRefresh();
       _autoDeadline = Date.now() + 3*60*1000;
       _autoTimer = setInterval(() => {
@@ -1791,13 +1817,15 @@ if (document.readyState === "complete" || document.readyState === "interactive")
     startCalendar();
   });
 }
-  // Force calendar reload correctly
+
+/************ CALENDAR REFRESH HELPERS (for update flow) ************/
+// Force calendar reload correctly after an update
 function refreshCalendarAfterUpdate(payload){
-  if (!state.calendar || !state.lastRange) return;
+  if (!state.calendar || !state.lastRange) return Promise.resolve();
 
   const { start, end } = state.lastRange;
 
-  readRange(start, end)
+  return readRange(start, end)
     .then(events => {
       state.lastEventsFull = events.slice();
       populateFilters(events);
@@ -1812,7 +1840,9 @@ function refreshCalendarAfterUpdate(payload){
       state.calendar.addEventSource({ events: filtered });
       state.calendar.refetchEvents();
     })
-    .catch(err => console.error("Calendar refresh error:", err));
+    .catch(err => {
+      console.error("Calendar refresh error:", err);
+    });
 }
 
 // Check if updated event is now visible in calendar
