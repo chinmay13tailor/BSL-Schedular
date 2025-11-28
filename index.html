@@ -1024,56 +1024,36 @@ function onCreate(){
 function onUpdate() {
 
     if (!state.selectedEvent) {
-        alert("Select a task first");
+        alert("Select a task first.");
         return;
     }
 
     const payload = collectPayload();
-
     busy(true);
     loading("Updating…");
 
-    // Set update button = true
+    // Write update command
     writeAttributes({ ...payload, MS_Update_Buttton: true }, { mode: "update" })
-      .catch(err => {
-          busy(false);
-          alert("Update failed: " + err.message);
-      });
+      .catch(err => console.error(err));
 
-    // ---- POLLING BY TIMER: REFRESH EVERY 3s FOR 65 SECONDS ----
+    // ---- 65 SECOND AUTO REFRESH LOOP ----
     let elapsed = 0;
-    const interval = 3000; // 3 seconds
-    const maxTime = 65000; // 65 seconds
+    const interval = 3000; // 3s
+    const max = 65000;     // 65s
 
-    const polling = setInterval(() => {
+    const timer = setInterval(() => {
 
         elapsed += interval;
 
-        // Always refresh calendar
-        function refreshCalendarAfterUpdate(payload) {
-    if (!state.calendar) return;
+        // ALWAYS refresh calendar
+        refreshCalendarAfterUpdate();
 
-    const view = state.calendar.view;
+        loading(`Updating… (${Math.max(0, Math.ceil((max - elapsed)/1000))}s left)`);
 
-    readRange(view.activeStart, view.activeEnd)
-      .then(events => {
-          state.lastEventsFull = events;
+        if (elapsed >= max) {
+            clearInterval(timer);
 
-          state.calendar.getEvents().forEach(ev => ev.remove());
-          events.forEach(ev => state.calendar.addEvent(ev));
-
-          state.calendar.render();
-      })
-      .catch(err => console.error("Calendar refresh error:", err));
-}
-        // Update message
-        loading("Updating… (" + Math.ceil((maxTime - elapsed) / 1000) + "s left)");
-
-        // Stop after 65 seconds
-        if (elapsed >= maxTime) {
-            clearInterval(polling);
-
-            // Turn off button on TB (optional)
+            // Optional: reset the update flag
             writeAttributes({ MS_Update_Buttton: false }, { mode: "update" })
               .catch(()=>{});
 
@@ -1083,6 +1063,7 @@ function onUpdate() {
 
     }, interval);
 }
+
 
 
 /************ CANCEL ************/
