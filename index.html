@@ -1028,64 +1028,51 @@ function onUpdate() {
     return;
   }
 
-  // Collect updated form data
   const payload = collectPayload();
-
-  // CRITICAL → attach the correct event timestamp
-  // This ensures the correct event gets updated.
   payload[ATTR_MS_UPD_TS] = state.selectedEvent.extendedProps.__ts;
 
+  isUpdatingMode = true;   // <<< START BLOCKING messages
   loading("Updating...");
   busy(true);
 
-  // Write update attributes (MS_Update_Button = true)
   writeAttributes(payload, { mode: "update" })
     .then(() => {
       closeOverlay();
 
-      // Start 65-second auto-refresh
       let remaining = 65;
-      loading(`Updating… (${remaining}s left)`);
 
       const timer = setInterval(() => {
+
+        // Show ONLY updating countdown
+        const loadEl = $("#loading");
+        if (loadEl) loadEl.textContent = `Updating… (${remaining}s left)`;
+
         remaining--;
-        loading(`Updating… (${remaining}s left)`);
 
-        // STOP after 65 seconds
-        if (remaining <= 0) {
-          clearInterval(timer);
-          busy(false);
-          loading("Stopped auto-refresh");
-          return;
-        }
-
-        // REFRESH CALENDAR ON EVERY LOOP
         if (!state.lastRange) return;
 
         readRange(state.lastRange.start, state.lastRange.end)
           .then(events => {
             state.lastEventsFull = events.slice();
             populateFilters(events);
-            refreshCalendar();
-          })
-          .catch(err => {
-            console.error("Auto-refresh error:", err);
+            refreshCalendar(); // refresh but HIDE its messages
           });
 
-      }, 3000); // Refresh every 3 seconds
+        if (remaining <= 0) {
+          clearInterval(timer);
+          isUpdatingMode = false;   // <<< STOP BLOCKING
+          loading("Updated ✓");     // now allowed
+          busy(false);
+        }
+
+      }, 1000);
     })
     .catch(err => {
+      isUpdatingMode = false;
       console.error(err);
-      alert(err.message || "Failed to update");
-    })
-    .finally(() => {
-      busy(false);
+      alert("Update failed");
     });
 }
-
-
-
-
 /************ CANCEL ************/
 function onCancel(){
   if (!state.selectedEvent || !state.selectedEvent.extendedProps){
