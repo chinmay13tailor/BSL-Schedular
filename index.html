@@ -481,6 +481,7 @@ const state = {
   listMonth: null,
   lastListRange: null
 };
+let isUpdatingMode = false;
 
 let overlay = null;
 
@@ -802,6 +803,7 @@ function writeMaintenanceTimeseries(payload, opts) {
 /************ DETAILS PANEL ************/
 function showDetails(ev){
   state.selectedEvent = ev;
+  state.mode = "update" ;
   const p = ev.extendedProps;
   const fmt = v => v ? new Date(Number(v)).toLocaleString() : "-";
   const det = $("#details");
