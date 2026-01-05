@@ -1084,12 +1084,23 @@ function onUpdate() {
 
         if (!state.lastRange) return;
 
-        readRange(state.lastRange.start, state.lastRange.end)
-          .then(events => {
-            state.lastEventsFull = events.slice();
-            populateFilters(events);
-            refreshCalendar();
-          });
+readRange(state.lastRange.start, state.lastRange.end)
+  .then(events => {
+    state.lastEventsFull = events.slice();
+    populateFilters(events);
+    refreshCalendar();
+
+    // 🔑 REBIND SELECTED EVENT AFTER UPDATE
+    const updated = events.find(
+      ev => String(ev.extendedProps.__ts) === String(payload[ATTR_MS_UPD_TS])
+    );
+
+    if (updated) {
+      state.selectedEvent = updated;
+      showDetails(updated);   // refresh right panel
+    }
+  });
+
 
         if (remaining <= 0) {
           clearInterval(timer);
