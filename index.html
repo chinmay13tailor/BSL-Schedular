@@ -1793,30 +1793,12 @@ function initUI(){
     $("#modalTitle").textContent = "Update maintenance task";
     $("#saveTask").textContent   = "Update";
 
-let baseDate = null;
-
-// Prefer MS_Date (date-only)
-if (Number.isFinite(p.MS_Date)) {
-  baseDate = new Date(p.MS_Date);
-}
-// Fallback to MS_Start
-else if (Number.isFinite(p.MS_Start)) {
-  baseDate = new Date(p.MS_Start);
-}
-// Absolute fallback (today)
-else {
-  baseDate = new Date();
-}
-
-state.pickedDate = new Date(
-  baseDate.getFullYear(),
-  baseDate.getMonth(),
-  baseDate.getDate()
-);
+const safeDate = Number.isFinite(state.pickedDate?.getTime())
+  ? state.pickedDate
+  : new Date();
 
 $("#fDate").value = new Date(
-  state.pickedDate.getTime()
-  - state.pickedDate.getTimezoneOffset() * 60000
+  safeDate.getTime() - safeDate.getTimezoneOffset() * 60000
 ).toISOString().slice(0, 10);
 
 
