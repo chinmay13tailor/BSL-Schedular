@@ -1068,53 +1068,50 @@ function onUpdate() {
   busy(true);
 
   // 🔥 DIRECT TIMESERIES WRITE (UPDATE)
-  writeMaintenanceTimeseries(payload, { mode: "update" })
-    .then(() => {
-      closeOverlay();
+writeMaintenanceTimeseries(payload, { mode: "update" })
+  .then(() => {
+    closeOverlay();
 
-      let remaining = 65;
+    // 🔥 SINGLE refresh – no polling
+    if (state.lastRange) {
+      readRange(state.lastRange.start, state.lastRange.end)
+        .then(events => {
+          state.lastEventsFull = events.slice();
+          populateFilters(events);
+          refreshCalendar();
 
-      const timer = setInterval(() => {
+          // Rebind selected event (important)
+          const updated = events.find(
+            ev => String(ev.extendedProps.__ts) === String(payload[ATTR_MS_UPD_TS])
+          );
+          if (updated) {
+            state.selectedEvent = updated;
+            showDetails(updated);
+          }
 
-        const loadEl = $("#loading");
-        if (loadEl) loadEl.textContent = `Updating… (${remaining}s left)`;
-
-        remaining--;
-
-        if (!state.lastRange) return;
-
-readRange(state.lastRange.start, state.lastRange.end)
-  .then(events => {
-    state.lastEventsFull = events.slice();
-    populateFilters(events);
-    refreshCalendar();
-
-    // 🔑 REBIND SELECTED EVENT AFTER UPDATE
-    const updated = events.find(
-      ev => String(ev.extendedProps.__ts) === String(payload[ATTR_MS_UPD_TS])
-    );
-
-    if (updated) {
-      state.selectedEvent = updated;
-      showDetails(updated);   // refresh right panel
+          loading("Updated ✓");
+        })
+        .catch(err => {
+          console.error(err);
+          loading("Updated (refresh failed)");
+        })
+        .finally(() => {
+          busy(false);
+          isUpdatingMode = false;
+        });
+    } else {
+      loading("Updated ✓");
+      busy(false);
+      isUpdatingMode = false;
     }
+  })
+  .catch(err => {
+    isUpdatingMode = false;
+    busy(false);
+    console.error(err);
+    alert("Update failed");
   });
 
-
-        if (remaining <= 0) {
-          clearInterval(timer);
-          isUpdatingMode = false;
-          loading("Updated ✓");
-          busy(false);
-        }
-
-      }, 1000);
-    })
-    .catch(err => {
-      isUpdatingMode = false;
-      console.error(err);
-      alert("Update failed");
-    });
 }
 
 /************ CANCEL ************/
