@@ -1793,14 +1793,38 @@ function initUI(){
     $("#modalTitle").textContent = "Update maintenance task";
     $("#saveTask").textContent   = "Update";
 
-    const date = new Date(p.MS_Date || p.MS_Start);
-    state.pickedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+let baseDate = null;
+
+// Prefer MS_Date (date-only)
+if (Number.isFinite(p.MS_Date)) {
+  baseDate = new Date(p.MS_Date);
+}
+// Fallback to MS_Start
+else if (Number.isFinite(p.MS_Start)) {
+  baseDate = new Date(p.MS_Start);
+}
+// Absolute fallback (today)
+else {
+  baseDate = new Date();
+}
+
+state.pickedDate = new Date(
+  baseDate.getFullYear(),
+  baseDate.getMonth(),
+  baseDate.getDate()
+);
+
+$("#fDate").value = new Date(
+  state.pickedDate.getTime()
+  - state.pickedDate.getTimezoneOffset() * 60000
+).toISOString().slice(0, 10);
+
 
     $("#fTitle").value = p.MS_Title || "";
     if ($("#msMachine")) $("#msMachine").value = p.MS_Machine || "Montex_Stenter";
     $("#fType").value     = p.MS_Type || "Preventive";
     $("#fPriority").value = String(p.MS_Priority != null ? p.MS_Priority : "3");
-    $("#fDate").value     = new Date(state.pickedDate.getTime() - state.pickedDate.getTimezoneOffset()*60000).toISOString().slice(0,10);
+
     $("#fTimeStart").value= pad2(new Date(p.MS_Start).getHours()) + ":" + pad2(new Date(p.MS_Start).getMinutes());
     $("#fTimeEnd").value  = pad2(new Date(p.MS_End).getHours())   + ":" + pad2(new Date(p.MS_End).getMinutes());
 
@@ -1833,6 +1857,9 @@ function initUI(){
     }
     generatePdf(state.selectedEvent);
   });
+}
+function safeMsToDate(ms, fallback = new Date()) {
+  return Number.isFinite(ms) ? new Date(ms) : fallback;
 }
 
 /************ BOOT ************/
