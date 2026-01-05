@@ -739,41 +739,65 @@ function refreshCalendar(){
 }
 
 /************ WRITE ATTRIBUTES ************/
-function writeAttributes(payload, opts){
+function writeMaintenanceTimeseries(payload, opts) {
   if (!JWT) return Promise.reject(new Error("Missing JWT (?token=)"));
 
-  const url = API_BASE + "/plugins/telemetry/DEVICE/" + DEVICE_ID + "/SERVER_SCOPE";
+  const url =
+    API_BASE +
+    "/plugins/telemetry/DEVICE/" +
+    DEVICE_ID +
+    "/timeseries/ANY";
 
-  const body = {
-    MS_Title: payload.MS_Title,
-    MS_Machine: payload.MS_Machine,
-    MS_Type: payload.MS_Type,
-    MS_Priority: payload.MS_Priority,
-    MS_Date: payload.MS_Date,
-    MS_Start: payload.MS_Start,
-    MS_End: payload.MS_End,
-    MS_Status: payload.MS_Status || "Planned",
-    MS_Description: payload.MS_Description || "",
-    MS_Technicians: payload.MS_Technicians || "",
-    MS_Task: payload.MS_Task || ""
-  };
+  let ts;
 
-  if (opts && opts.mode === "create"){
-    body[ATTR_MS_SAVE] = true;
-  } else if (opts && (opts.mode === "update" || opts.mode === "cancel")){
-    body[ATTR_MS_UPDATE] = true;
-    if (payload[ATTR_MS_UPD_TS]) body[ATTR_MS_UPD_TS] = payload[ATTR_MS_UPD_TS];
+  if (opts && opts.mode === "create") {
+    ts = Date.now();
+  }
+  else if (opts && opts.mode === "update") {
+    if (!payload[ATTR_MS_UPD_TS]) {
+      return Promise.reject(new Error("Missing base timestamp for update"));
+    }
+    ts = Number(payload[ATTR_MS_UPD_TS]);
+  }
+  else {
+    return Promise.reject(new Error("Invalid write mode"));
   }
 
+  const body = [
+    {
+      ts,
+      values: {
+        MS_Title: payload.MS_Title,
+        MS_Machine: payload.MS_Machine,
+        MS_Type: payload.MS_Type,
+        MS_Priority: payload.MS_Priority,
+        MS_Date: payload.MS_Date,
+        MS_Start: payload.MS_Start,
+        MS_End: payload.MS_End,
+        MS_Status: payload.MS_Status || "Planned",
+        MS_Description: payload.MS_Description || "",
+        MS_Technicians: payload.MS_Technicians || "",
+        MS_Task: payload.MS_Task || ""
+      }
+    }
+  ];
+
   return fetch(url, {
-    method:"POST",
-    headers:{
-      "X-Authorization":"Bearer " + JWT,
-      "Content-Type":"application/json"
+    method: "POST",
+    headers: {
+      "X-Authorization": "Bearer " + JWT,
+      "Content-Type": "application/json"
     },
     body: JSON.stringify(body)
-  }).then(res => res.ok ? null : res.text().then(t => { throw new Error("Attribute write failed: " + t); }));
+  }).then(res =>
+    res.ok
+      ? null
+      : res.text().then(t => {
+          throw new Error("Telemetry write failed: " + t);
+        })
+  );
 }
+
 
 /************ DETAILS PANEL ************/
 function showDetails(ev){
@@ -973,9 +997,11 @@ function onCreate(){
   loading("Saving…");
   busy(true);
 
-  writeAttributes(payload, { mode:"create" })
+  // 🔥 DIRECT TIMESERIES WRITE (CREATE)
+  writeMaintenanceTimeseries(payload, { mode:"create" })
     .then(() => {
       closeOverlay();
+
       // Auto-refresh loop for create
       stopAutoRefresh();
       _autoDeadline = Date.now() + 3*60*1000;   // 3 minutes
@@ -991,6 +1017,7 @@ function onCreate(){
           .then(events => {
             state.lastEventsFull = events.slice();
             populateFilters(events);
+
             if (state.view === "list" && state.lastListRange){
               renderList(applyFilters(events));
             } else {
@@ -1000,6 +1027,7 @@ function onCreate(){
               if (d){ d.className = "empty"; d.textContent = "Select a task"; }
               if (sa) sa.style.display = "none";
             }
+
             if (events.some(ev => eventMatchesPayload(ev, payload))){
               stopAutoRefresh();
               loading("Update detected ✓");
@@ -1020,6 +1048,7 @@ function onCreate(){
     });
 }
 
+
 /* ---------- UPDATE FLOW ---------- */
 function onUpdate() {
 
@@ -1029,13 +1058,16 @@ function onUpdate() {
   }
 
   const payload = collectPayload();
+
+  // 🔑 BASE TIMESTAMP FOR OVERWRITE
   payload[ATTR_MS_UPD_TS] = state.selectedEvent.extendedProps.__ts;
 
-  isUpdatingMode = true;   // <<< START BLOCKING messages
+  isUpdatingMode = true;
   loading("Updating...");
   busy(true);
 
-  writeAttributes(payload, { mode: "update" })
+  // 🔥 DIRECT TIMESERIES WRITE (UPDATE)
+  writeMaintenanceTimeseries(payload, { mode: "update" })
     .then(() => {
       closeOverlay();
 
@@ -1043,7 +1075,6 @@ function onUpdate() {
 
       const timer = setInterval(() => {
 
-        // Show ONLY updating countdown
         const loadEl = $("#loading");
         if (loadEl) loadEl.textContent = `Updating… (${remaining}s left)`;
 
@@ -1055,13 +1086,13 @@ function onUpdate() {
           .then(events => {
             state.lastEventsFull = events.slice();
             populateFilters(events);
-            refreshCalendar(); // refresh but HIDE its messages
+            refreshCalendar();
           });
 
         if (remaining <= 0) {
           clearInterval(timer);
-          isUpdatingMode = false;   // <<< STOP BLOCKING
-          loading("Updated ✓");     // now allowed
+          isUpdatingMode = false;
+          loading("Updated ✓");
           busy(false);
         }
 
@@ -1073,6 +1104,7 @@ function onUpdate() {
       alert("Update failed");
     });
 }
+
 /************ CANCEL ************/
 function onCancel(){
   if (!state.selectedEvent || !state.selectedEvent.extendedProps){
@@ -1082,6 +1114,7 @@ function onCancel(){
   if (!confirm("Cancel this maintenance task?")) return;
 
   const p = state.selectedEvent.extendedProps;
+
   const payload = {
     MS_Title: p.MS_Title || "",
     MS_Machine: p.MS_Machine || "Montex_Stenter",
@@ -1095,14 +1128,16 @@ function onCancel(){
     MS_Technicians: p.MS_Technicians || "",
     MS_Task: p.MS_Task || ""
   };
+
+  // 🔑 BASE TS FOR OVERWRITE
   payload[ATTR_MS_UPD_TS] = p.__ts;
 
   loading("Cancelling…");
   busy(true);
 
-  writeAttributes(payload, { mode:"cancel" })
+  // 🔥 DIRECT TIMESERIES WRITE (UPDATE)
+  writeMaintenanceTimeseries(payload, { mode:"update" })
     .then(() => {
-      // Generic auto-refresh
       stopAutoRefresh();
       _autoDeadline = Date.now() + 3*60*1000;
       _autoTimer = setInterval(() => {
@@ -1128,7 +1163,10 @@ function onCancel(){
               if (sa) sa.style.display = "none";
             }
 
-            const found = events.find(ev => String(ev.extendedProps.__ts) === String(payload[ATTR_MS_UPD_TS]));
+            const found = events.find(
+              ev => String(ev.extendedProps.__ts) === String(payload[ATTR_MS_UPD_TS])
+            );
+
             if (found && String(found.extendedProps.MS_Status).toLowerCase() === "cancelled"){
               stopAutoRefresh();
               loading("Update detected ✓");
@@ -1148,6 +1186,7 @@ function onCancel(){
       busy(false);
     });
 }
+
 
 /************ PDF ************/
 function generatePdf(ev){
